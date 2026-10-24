@@ -3,17 +3,18 @@ package tetris;
 import java.lang.foreign.*;
 
 import tetris.controller.GameController;
+import tetris.controller.input.KeyBinds;
 import tetris.engine.GameEngine;
 import tetris.engine.observers.BoardDisplayManager;
 import tetris.engine.observers.HoldDisplayManager;
 import tetris.engine.observers.NextQueueDisplayManager;
-import tetris.engine.observers.ScoreDisplayManager;
+// import tetris.engine.observers.ScoreDisplayManager;
 import tetris.graphics.GameWindow;
 import tetris.utils.SDL;
 
 public class SDLApp {
-    private final GameEngine engine = new GameEngine();
-    private final GameWindow window = new GameWindow();
+    private final GameEngine engine = new GameEngine(10, 20);
+    private final GameWindow window = new GameWindow(new KeyBinds());
     private final GameController controller = new GameController(engine, window, null);
     public static void start() {
         MemorySegment renderer = SDL.init_SDL(500, 800);
