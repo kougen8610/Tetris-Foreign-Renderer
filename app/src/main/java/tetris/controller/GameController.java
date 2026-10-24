@@ -269,9 +269,13 @@ public class GameController implements GameOverListener, AutoOperationListener{
         this.softDropFactor = softDropFactor;
     }
     
+    public void dispose() {
+        scheduler.shutdown();
+    }
+
     @Override 
     public void onGameOver() {
-        scheduler.shutdown();
+        dispose();
         gameState = GameState.ended;
         window.onGameOver();
     }
@@ -311,5 +315,5 @@ public class GameController implements GameOverListener, AutoOperationListener{
     public GameState getGameState() {
         return gameState;
     }
-    
+
 }

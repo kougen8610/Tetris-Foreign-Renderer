@@ -13,7 +13,7 @@ import tetris.graphics.GameWindow;
 import tetris.utils.SDL;
 
 public class SDLApp {
-    private final GameEngine engine = new GameEngine(10, 20);
+    private final GameEngine engine = new GameEngine(10, 20, null);
     private final GameWindow window = new GameWindow(new KeyBinds());
     private final GameController controller = new GameController(engine, window, null);
     public static void start() {
