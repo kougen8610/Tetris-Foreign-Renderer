@@ -16,9 +16,7 @@ import tetris.engine.type.Direction;
 import tetris.engine.type.GameState;
 import tetris.engine.type.Rotation;
 import tetris.engine.type.UnifiedKey;
-import tetris.engine.type.Input.GameInput;
 import tetris.engine.type.Input.GameKey;
-import tetris.engine.type.Input.KeyAction;
 import tetris.graphics.GameWindow;
 
 /**
@@ -133,24 +131,8 @@ public class GameController implements GameOverListener, AutoOperationListener{
         handleDASEvent();
     }
     private void startCharging(UnifiedKey key, Direction direction) {
-        // Timeline t = new Timeline(
-        //     new KeyFrame(
-        //         Duration.seconds(DAS/60), event -> {
-        //             DASCharges.put(direction, DASCharges.get(direction) + 1);
-        //             DASChargedKeys.add(key);
-        //             handleDASEvent();
-        //         }
-        //     )
-        // );
-        // t.setOnFinished(event -> {
-        //     DASChargingKeys.remove(key);
-        // });
-        // t.play();
-        // DASChargingKeys.put(key, t);
-
-
     // new
-    long delay = (long)(DAS * 1000 / 60);
+        long delay = (long)(DAS * 1000 / 60);
     // long delay = (long)(DAS * 1000000000 / 60);
         ScheduledFuture chargeDAS = scheduler.schedule(() -> {
             dispatcher.dispatch(() -> {            
@@ -289,7 +271,7 @@ public class GameController implements GameOverListener, AutoOperationListener{
     
     @Override 
     public void onGameOver() {
-        gravityTask.cancel(false);
+        scheduler.shutdown();
         gameState = GameState.ended;
         window.onGameOver();
     }
@@ -329,4 +311,5 @@ public class GameController implements GameOverListener, AutoOperationListener{
     public GameState getGameState() {
         return gameState;
     }
+    
 }
