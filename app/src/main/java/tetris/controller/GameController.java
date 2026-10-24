@@ -73,6 +73,7 @@ public class GameController implements GameOverListener, AutoOperationListener{
     }
 
     private void reset() {
+        pressedKeys.clear();
         engine.reset();
         window.onStart();
     }
@@ -128,6 +129,9 @@ public class GameController implements GameOverListener, AutoOperationListener{
         handleSoftDropEvent();
     }
 
+    public void onAutoMoveDown() {
+        handleDASEvent();
+    }
     private void startCharging(UnifiedKey key, Direction direction) {
         // Timeline t = new Timeline(
         //     new KeyFrame(
@@ -205,28 +209,14 @@ public class GameController implements GameOverListener, AutoOperationListener{
             resetGravityTimeline(engine.getGravity());
     }
 
-    // keyboard controller, triggers tetromino movement functions
-    public void handleGameInput(GameInput input) {
-        GameKey key = input.gameKey();
-        UnifiedKey physicalKey = input.unifiedKey();
-        if (key == null) {
+    public void handleKeyPressed(GameKey key, UnifiedKey physicalKey) {
+        if (!pressedKeys.add(physicalKey)) { // Ignore repeated KEY_DOWN events
             return;
         }
-        if (input.keyAction() == KeyAction.PRESS) {
 
-            // Ignore repeated KEY_DOWN events
-            if (!pressedKeys.add(physicalKey)) {
-                return;
-            }
-            handleKeyPressed(input.gameKey(), input.unifiedKey());
+        if (key == null)
+            return;
 
-        } else {
-            pressedKeys.remove(physicalKey);
-            handleKeyReleased(key, physicalKey);
-        }
-    }
-
-    private void handleKeyPressed(GameKey key, UnifiedKey physicalKey) {
         if (gameState == GameState.ended) {
             if (key == GameKey.RESTART) {
                 restart();
@@ -269,10 +259,15 @@ public class GameController implements GameOverListener, AutoOperationListener{
         handleSoftDropEvent();
     }
 
-    private void handleKeyReleased(GameKey key, UnifiedKey physicalKey) {
+    public void handleKeyReleased(GameKey key, UnifiedKey physicalKey) {
+        pressedKeys.remove(physicalKey);
+
         if (gameState != GameState.active) {
             return;
         }
+
+        if (key == null)
+            return;
 
         switch (key) {
             case SOFTDROP ->
@@ -286,9 +281,7 @@ public class GameController implements GameOverListener, AutoOperationListener{
 
             default -> {}
         }
-    }
-
-    
+    } 
 
     public void setSoftDropFactor(double softDropFactor) {
         this.softDropFactor = softDropFactor;

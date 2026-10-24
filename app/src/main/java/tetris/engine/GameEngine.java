@@ -22,20 +22,24 @@ import tetris.engine.observers.Observer;
 import tetris.engine.operator.MoveDownOperator;
 import tetris.engine.operator.MoveLeftOperator;
 import tetris.engine.operator.MoveRightOperator;
+import tetris.engine.operator.MoveUpOperator;
 import tetris.engine.operator.Operator;
 import tetris.engine.operator.RotateClockwiseOperator;
 import tetris.engine.operator.RotateCounterClockwiseOperator;
 import tetris.engine.operator.RotateR180Operator;
 import tetris.engine.rotationStrategy.RotationStrategy;
 import tetris.engine.rotationStrategy.classicRotation;
+import tetris.engine.score.ScoreManager;
 import tetris.engine.type.Direction;
 import tetris.engine.type.Rotation;
+import tetris.engine.type.RotationState;
+import tetris.engine.type.SpinState;
 import tetris.engine.type.TetrominoType;
 import tetris.utils.KickTable;
 import tetris.utils.Point;
 
 public class GameEngine implements Observable, Controllable{
-    private Score score;
+    private ScoreManager scoreManager;
     private Queue<TetrominoType> nextQueue;
     private TetrominoGenerator tetrominoGenerator;
     private LockStrategy lockStrategy;
@@ -45,9 +49,11 @@ public class GameEngine implements Observable, Controllable{
     private int width;
     private int height;
     private List<Tetromino> allTetrominos;
-    public Tetromino currentTetromino;
+    private Tetromino currentTetromino;
+    private Tetromino shadowTetromino;
     private TetrominoType holdTetrominoType;
-    List<Observer> observers;
+    private SpinState currentSpinState;
+    private List<Observer> observers;
 
     private double gravity; // move down num per sec
     private final PauseTransition lockTimer =
@@ -56,6 +62,7 @@ public class GameEngine implements Observable, Controllable{
     private int lockResets;
     private boolean lockTimerFinished;
     private AutoOperationListener autoOperationListener;
+    // private 
     /**
      * Constructs game bord with specific dimension
      * @param width
@@ -69,7 +76,6 @@ public class GameEngine implements Observable, Controllable{
         // configure game, todo: create and use initEngine(JSON? configFile) instead below
         tetrominoGenerator = new BagGenerator();
         rotationStrategy = new classicRotation();
-        score = new Score(this);
 
         nextQueue = new LinkedList<TetrominoType>();
         allTetrominos = new ArrayList<Tetromino>();
@@ -83,15 +89,15 @@ public class GameEngine implements Observable, Controllable{
     /**
      * Constructs default game board 10x20 dimension
      */
-    public GameEngine() {
-        this(10, 20);
-    }
+    // public GameEngine() {
+    //     this(10, 20);
+    // }
 
     /**
      * Reset the board state into initial
      */
     public void reset() {
-        score.reset();
+        scoreManager.reset();
         allTetrominos = new ArrayList<Tetromino>();
         currentTetromino = null;
         holdTetrominoType = null;
@@ -103,7 +109,92 @@ public class GameEngine implements Observable, Controllable{
         spawn();
     }
 
-    public void spawn() {
+    public void rotate(Rotation rotation) {
+        if (!superRotate(rotation)) {
+            return;
+        }
+        updateShadow();
+
+        // detect & write currentSpinState
+        if (isImmobile())
+            currentSpinState = SpinState.MINI_SPIN;
+
+        if (currentTetromino.type == TetrominoType.T) {
+            SpinState threeCornerTSpinState = detectTSpin();
+            if (threeCornerTSpinState == SpinState.PROPER_SPIN) {
+                currentSpinState = threeCornerTSpinState;
+            }
+        }
+    }
+
+    public void move(Direction direction){
+        Operator op;
+        if (direction == Direction.DOWN) {op = new MoveDownOperator();}
+        else if (direction == Direction.LEFT) {op = new MoveLeftOperator();}
+        else if (direction == Direction.RIGHT) {op = new MoveRightOperator();}
+        else {op = null;}
+        tryOperate(op);
+        if (direction != Direction.DOWN)
+            updateShadow();
+    }
+
+    public void moveDAS(Direction direction) {
+        Operator op;
+        if (direction == Direction.DOWN) {op = new MoveDownOperator();}
+        else if (direction == Direction.LEFT) {op = new MoveLeftOperator();}
+        else if (direction == Direction.RIGHT) {op = new MoveRightOperator();}
+        else {op = null;}
+
+        while (true) {
+            if (! tryOperate(op)) {
+                break;
+            }
+            if (direction != Direction.DOWN)
+                {autoOperationListener.onAutoHorizontalMove();}
+            else if (direction == Direction.DOWN)
+                {autoOperationListener.onAutoMoveDown();}
+        }
+        if (direction != Direction.DOWN)
+            updateShadow();
+    }
+
+    public void hardDrop() {
+        moveDAS(Direction.DOWN);
+        lock();
+    }
+    
+    /**
+     * Swap holdTetromino and currentTetromino. spawn a new one if hold never used
+     * 
+     */
+    public void hold() {
+        removeCurrentTetromino();
+        Tetromino currentTetrominoClone = new Tetromino(currentTetromino);
+        if (holdTetrominoType == null) {
+            spawn();
+        }
+
+        else {
+            currentTetromino = new Tetromino(centreTopPoint(), holdTetrominoType);
+            allTetrominos.add(currentTetromino);
+        }
+
+        holdTetrominoType = currentTetrominoClone.type;
+        updateShadow();
+    }
+
+    void updateShadow() {
+        shadowTetromino = new Tetromino(currentTetromino);
+        Tetromino clone = new Tetromino(currentTetromino);
+        Operator op = new MoveDownOperator();
+        while (!hasCollision(shadowTetromino)) {
+            shadowTetromino.moveDown();
+        }
+        shadowTetromino.moveUp();
+        notifyObservers();
+    }
+
+    void spawn() {
         // from previous piece's leftover data, decide isAutoSpawned true/false, 
         // to know if needed to notify controller RIGHT AFTER current piece spawned
         boolean isAutoSpawned = false;
@@ -128,6 +219,7 @@ public class GameEngine implements Observable, Controllable{
         allTetrominos.add(currentTetromino);
         lockResets = 0;
 
+        currentSpinState = SpinState.NOT_SPIN;
         checkLanded();
         
         // when auto-spawned, notify controller
@@ -136,7 +228,8 @@ public class GameEngine implements Observable, Controllable{
         }
 
         lockTimerFinished = false;
-        notifyObservers();
+        updateShadow();
+        // notifyObservers();
     }
 
     /**
@@ -144,7 +237,7 @@ public class GameEngine implements Observable, Controllable{
      * then if landed, start lockTimer
      * otherwise, end lock Timer
      */
-    private void checkLanded() {
+    void checkLanded() {
         if (landed(currentTetromino)) {
             lockTimer.playFromStart();
             lockResets ++;
@@ -163,20 +256,28 @@ public class GameEngine implements Observable, Controllable{
      * @param op
      * @return true if operation success
      */
-    public boolean tryOperate(Operator op) {
-        Tetromino clone = new Tetromino(currentTetromino);
-        op.operate(clone);
-        if (hasCollision(clone)) {
+    boolean tryOperate(Operator op) {
+       
+        if (!canOperate(op)) {
             return false;
         }
-
         op.operate(currentTetromino);
         checkLanded();
         notifyObservers();
         return true;
     }
 
-    public void superRotate(Rotation rotation) {
+    boolean canOperate(Operator op) {
+        Tetromino clone = new Tetromino(currentTetromino);
+        op.operate(clone);
+        if (hasCollision(clone)) {
+            return false;
+        }
+        return true;
+    }
+
+
+    boolean superRotate(Rotation rotation) {
         Operator op;
         if (rotation == Rotation.CLOCKWISE)              {op = new RotateClockwiseOperator();}
         else if (rotation == Rotation.COUNTER_CLOCKWISE) {op = new RotateCounterClockwiseOperator();}
@@ -184,7 +285,7 @@ public class GameEngine implements Observable, Controllable{
         
         // try without kick
         if (tryOperate(op)) {
-            return ;
+            return true;
         }
 
         // failed without kick
@@ -201,7 +302,7 @@ public class GameEngine implements Observable, Controllable{
         Point oriPos = new Point(currentTetromino.centre);
         int currentIndex = allTetrominos.indexOf(currentTetromino);
         if (kickList == null) {
-            return;
+            return false;
         }
         for (Point shift: kickList) {
             // 2. move to next position (to try every position 1 by 1)
@@ -223,7 +324,7 @@ public class GameEngine implements Observable, Controllable{
             // 3. try rotate at this position
 
             if (tryOperate(op)) {
-                return;
+                return true;
             }
 
             
@@ -234,65 +335,78 @@ public class GameEngine implements Observable, Controllable{
         if (currentIndex >= 0) {
             allTetrominos.set(currentIndex, currentTetromino);
         }
-    }
-    public void rotate(Rotation rotation) {
-        superRotate(rotation);
-    }
-    public void lock() {
-        checkCompletedLines(currentTetromino);
-        lockTimer.stop();
-        spawn();
-        notifyObservers();
+        return false;
     }
 
-    public void move(Direction direction){
-        Operator op;
-        if (direction == Direction.DOWN) {op = new MoveDownOperator();}
-        else if (direction == Direction.LEFT) {op = new MoveLeftOperator();}
-        else if (direction == Direction.RIGHT) {op = new MoveRightOperator();}
-        else {op = null;}
-        tryOperate(op);
-
-    }
-
-    public void moveDAS(Direction direction) {
-        Operator op;
-        if (direction == Direction.DOWN) {op = new MoveDownOperator();}
-        else if (direction == Direction.LEFT) {op = new MoveLeftOperator();}
-        else if (direction == Direction.RIGHT) {op = new MoveRightOperator();}
-        else {op = null;}
-
-        while (true) {
-            if (! tryOperate(op)) {
-                break;
-            }
-            if (direction != Direction.DOWN)
-                {autoOperationListener.onAutoHorizontalMove();}
+    /**
+     * 
+     * @return true if current tetromino is immobile
+     */
+    boolean isImmobile() {
+        Operator[] operators = {new MoveDownOperator(), new MoveLeftOperator(), new MoveRightOperator(), new MoveUpOperator()};
+        for (Operator operator : operators) {
+            if (canOperate(operator))
+                return false;
         }
-    }
-    public void hardDrop() {
-        moveDAS(Direction.DOWN);
-        lock();
-
+        return true;
     }
     
     /**
-     * Swap holdTetromino and currentTetromino. spawn a new one if hold never used
-     * 
+     * standard 3 corners detection, ref: https://tetris.wiki/T-Spin
+     * impl by: spawn a single at 4 corners of T, then do collison tests, 
+     * if 3/4 corners colide, is T spin, then if 2/2 front corners colide, is proper T spin 
+     * @return SpinState: (NOT/MINI/PROPER)_SPIN
      */
-    public void hold() {
-        removeCurrentTetromino();
-        Tetromino currentTetrominoClone = new Tetromino(currentTetromino);
-        if (holdTetrominoType == null) {
-            spawn();
+    SpinState detectTSpin() { 
+        // spawn single mino piece at top-left corner
+        Point centre = currentTetromino.getCentre();
+        Piece corner = new Piece(new Mino((int)centre.getX() - 1, (int)centre.getY() - 1));
+
+        // rotate to be front-left corner of current T
+        int cwRotationForCorner = 0;
+        if (currentTetromino.rotationState == RotationState.ZERO)
+            ;
+        else if (currentTetromino.rotationState == RotationState.RIGHT)
+            cwRotationForCorner = 1;
+        else if (currentTetromino.rotationState == RotationState.TWO)
+            cwRotationForCorner = 2;
+        else if (currentTetromino.rotationState == RotationState.LEFT)
+            cwRotationForCorner = 3;
+        for (int i = 0; i < cwRotationForCorner; i++)
+            corner.rotateClockwise(centre);
+
+        // collision tests, (test & rotatecw of corner & next test, 4 in total)
+        // first 2: front, last 2: other corners
+        int nBlockedFrontCorner = 0;
+        int nBlockedOtherCorner = 0;
+        for (int i = 0; i < 4; i++) {
+            // collision test
+            if (hasCollision(corner)) {
+                if (i < 2) {
+                    nBlockedFrontCorner++;
+                } else {
+                    nBlockedOtherCorner++;
+                }
+            }
+            corner.rotateClockwise(centre);
         }
 
-        else {
-            currentTetromino = new Tetromino(centreTopPoint(), holdTetrominoType);
-            allTetrominos.add(currentTetromino);
+        if (nBlockedFrontCorner + nBlockedOtherCorner >= 3) {
+            // is a T-spin! then decide proper or mini:
+            if (nBlockedFrontCorner == 2) 
+                return SpinState.PROPER_SPIN;
+            else
+                return SpinState.MINI_SPIN;
         }
+        return SpinState.NOT_SPIN;
+    }
 
-        holdTetrominoType = currentTetrominoClone.type;
+    void lock() {
+        int cleared = checkCompletedLines(currentTetromino);
+        if (!(cleared == 0 && currentSpinState == SpinState.NOT_SPIN))
+            scoreManager.onSpinOrClear(currentTetromino.type, currentSpinState, cleared);
+        lockTimer.stop();
+        spawn();
         notifyObservers();
     }
 
@@ -301,8 +415,8 @@ public class GameEngine implements Observable, Controllable{
      * @param m
      * @return
      */
-    public boolean hasCollision(Tetromino t) {
-        for (Tetromino other : allTetrominos) {
+    boolean hasCollision(Piece t) {
+        for (Piece other : allTetrominos) {
             if (other == t || other == currentTetromino)
                 continue;
 
@@ -318,7 +432,7 @@ public class GameEngine implements Observable, Controllable{
         return false;
     }
 
-    protected boolean hasWallCollision(Tetromino t) {
+    boolean hasWallCollision(Piece t) {
         for (Mino m : t.children) {
             double x = m.getPosition().getX();
             double y = m.getPosition().getY();
@@ -340,7 +454,7 @@ public class GameEngine implements Observable, Controllable{
      * @param t
      * @return
      */
-    public boolean landed(Tetromino t) {
+    boolean landed(Tetromino t) {
         // simulate a downward move, check if there is a collision
         Tetromino clone  = new Tetromino(t);
         clone.moveDown();
@@ -359,7 +473,7 @@ public class GameEngine implements Observable, Controllable{
      * 
      * @ret int: lines cleared
      */
-    private int clearLines(ArrayList<Integer> toClear, ArrayList<Tetromino> relatedTetrominos) { 
+    int clearLines(ArrayList<Integer> toClear, ArrayList<Tetromino> relatedTetrominos) { 
 
 
         for (Tetromino t : relatedTetrominos) {
@@ -390,7 +504,7 @@ public class GameEngine implements Observable, Controllable{
         return toClear.size();
     }
 
-    private ArrayList<Integer> findLinesToClear(ArrayList<Tetromino> relatedTetrominos, HashSet<Double> relatedHeights) {
+    ArrayList<Integer> findLinesToClear(ArrayList<Tetromino> relatedTetrominos, HashSet<Double> relatedHeights) {
         ArrayList<Integer> linesToClear = new ArrayList<Integer>();
         boolean[][] related_section = new boolean[this.width][relatedHeights.size()]; // true for mino exist, false for empty
         int minHeight = Collections.min(relatedHeights).intValue();
@@ -423,7 +537,7 @@ public class GameEngine implements Observable, Controllable{
         return linesToClear;
     }
     
-    private HashSet<Double> calcSetOfRelatedHeights(Tetromino t) {
+    HashSet<Double> calcSetOfRelatedHeights(Tetromino t) {
         HashSet<Double> related_heights = new HashSet<Double>();
         for (Mino mino: t.children) {
             related_heights.add(mino.getPosition().getY());
@@ -435,7 +549,7 @@ public class GameEngine implements Observable, Controllable{
      * lock tetromino trigger this, check for any lines to clear, if exist then clear.
      * @param lastLocked, the tetromino just locked, possible line clears should related with position of it
      */
-    public void checkCompletedLines(Tetromino lastLocked) {
+    int checkCompletedLines(Tetromino lastLocked) {
   
         //
         // group to lower/around/upper
@@ -466,11 +580,12 @@ public class GameEngine implements Observable, Controllable{
                 mino.getPosition().setY(mino.getPosition().getY() + cleared);
             }
         }
+        return cleared;
     }
     /**
      * everything need to do beside removing from allTetrominos list
      */
-    private void removeCurrentTetromino() {
+    void removeCurrentTetromino() {
         lockTimer.stop();
         allTetrominos.remove(currentTetromino);
     }
@@ -487,15 +602,15 @@ public class GameEngine implements Observable, Controllable{
         return this.height;
     }
 
-    public Score getScore() {
-        return score;
+    public ScoreManager getScoreManager() {
+        return scoreManager;
     }
 
     public double getGravity() {
         return gravity;
     }
 
-    public void setAutoSpawnListener(AutoOperationListener autoOperationListener){
+    public void setOperationListener(AutoOperationListener autoOperationListener){
         this.autoOperationListener = autoOperationListener;
     }
     
@@ -540,7 +655,15 @@ public class GameEngine implements Observable, Controllable{
         }
     }
 
+    public Tetromino getShadowTetromino() {
+        return this.shadowTetromino;
+    } 
+
+    public void setScoreManager(ScoreManager scoreManager) {
+        this.scoreManager = scoreManager;
+    }
+
     public void dispose() {
-        score.dispose();
+        scoreManager.dispose();
     }
 }

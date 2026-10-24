@@ -3,41 +3,59 @@ package tetris.controller.input;
 import java.io.FileInputStream;
 import java.io.FileOutputStream;
 import java.io.IOException;
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Properties;
-import java.util.function.Supplier;
 
 import tetris.engine.type.GameState;
 import tetris.engine.type.UnifiedKey;
 import tetris.engine.type.Input.GameKey;
 
 public class KeyBinds {
-    public Map<GameState, Map<UnifiedKey, GameKey>> binds;
-    private Supplier<GameState> stateSupplier;
-
-    public KeyBinds(Supplier<GameState> stateSupplier) {
-        this.stateSupplier = stateSupplier;
+    public  Map<GameState, Map<UnifiedKey, GameKey>> binds;
+    
+    public KeyBinds() {
         binds = new HashMap<>();
         for (GameState state : GameState.values()) {
             Map bindOfState = new HashMap<UnifiedKey, GameKey>();
             binds.put(state, bindOfState);
         }
-        try {load();} catch (Exception e) {}
-        try {save();} catch (Exception e) {}
+
+        load();
     }
 
-    public GameKey map(UnifiedKey unifiedKey) {
-        return binds.get(stateSupplier.get()).get(unifiedKey);
+    public GameKey map(UnifiedKey unifiedKey, GameState state) {
+        return binds.get(state).get(unifiedKey);
     }
 
     public void addBind(UnifiedKey unifiedKey, GameKey gameKey, GameState state) {
         binds.get(state).put(unifiedKey, gameKey);
     }
 
+    /**
+     * Gets keys that are binded to a Player's action
+     * @param gameKey
+     * @param state
+     * @return
+     */
+    public List<UnifiedKey> getUKeysFor(GameKey gameKey, GameState state) {
+        List <UnifiedKey> result = new ArrayList<UnifiedKey>();
+        
+        Map<UnifiedKey, GameKey> stateFiteredBinds = binds.get(state);
+        for (UnifiedKey uKey : stateFiteredBinds.keySet()) {
+            if (stateFiteredBinds.get(uKey) == gameKey) {
+                result.add(uKey);
+            }
+        }
+
+        return result;
+    }
+
     private static final String FILE_NAME = "keybinds.properties";
 
-    public void save() throws IOException {
+    public void save() {
         Properties properties = new Properties();
 
         for (var stateEntry : binds.entrySet()) {
@@ -56,14 +74,18 @@ public class KeyBinds {
 
         try (FileOutputStream out = new FileOutputStream(FILE_NAME)) {
             properties.store(out, "Tetris Key Bindings");
+        } catch (Exception e) {
+            System.out.println("Failed to save key bind file: " + e);
         }
     }
 
-    public void load() throws IOException {
+    public void load() {
         Properties properties = new Properties();
 
         try (FileInputStream in = new FileInputStream(FILE_NAME)) {
             properties.load(in);
+        } catch (IOException e) {
+            System.err.print("Failed to load confif file: " + e);
         }
 
         for (String propertyName : properties.stringPropertyNames()) {

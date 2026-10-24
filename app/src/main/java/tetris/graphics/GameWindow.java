@@ -4,6 +4,14 @@ import javafx.scene.Parent;
 import javafx.scene.Scene;
 import javafx.scene.layout.Pane;
 import javafx.stage.Stage;
+import tetris.controller.input.KeyBinds;
+import tetris.graphics.configPage.ConfigPane;
+import tetris.graphics.gameActive.BoardPane;
+import tetris.graphics.gameActive.GamePane;
+import tetris.graphics.gameActive.HoldPane;
+import tetris.graphics.gameActive.NextQueuePane;
+import tetris.graphics.gameActive.ScorePane;
+import tetris.graphics.gameActive.SpinClearPane;
 
 /**
  * Manages In-Game contents, including a gameboard
@@ -11,11 +19,15 @@ import javafx.stage.Stage;
 public class GameWindow {
     private final GamePane gamePane = new GamePane();
     private final MenuPane menuPane = new MenuPane();
+    private final ConfigPane configPane ;
     private final Scene scene;
 
-    public GameWindow() {
+    public GameWindow(KeyBinds keyBinds) {
         Pane initialPane = new Pane();
         scene = new Scene(initialPane, 640, 480);
+        menuPane.setOnConfig(this::showConfig);
+        configPane = new ConfigPane(keyBinds);
+        configPane.setOnReturnMenu(this::showMenu);
     }
 
     public void execute(Stage stage) {
@@ -31,6 +43,10 @@ public class GameWindow {
         showContent(menuPane);
     }
 
+    public void showConfig() {
+        showContent(configPane);
+    }
+
     public Scene getScene() {
         return scene;
     }
@@ -41,6 +57,10 @@ public class GameWindow {
 
     public ScorePane getScorePane() {
         return gamePane.getScorePane();
+    }
+
+    public SpinClearPane getSpinClearPane() {
+        return gamePane.getSpinClearPane();
     }
 
     public HoldPane getHoldPane() {

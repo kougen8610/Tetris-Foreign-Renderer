@@ -1,4 +1,4 @@
-package tetris.graphics;
+package tetris.graphics.gameActive;
 
 import java.util.List;
 
@@ -8,6 +8,7 @@ import javafx.scene.shape.Rectangle;
 import javafx.scene.shape.StrokeType;
 import tetris.engine.Mino;
 import tetris.engine.Tetromino;
+import tetris.graphics.VisualConfig;
 
 public class BoardPane extends GridPane {
 
@@ -15,13 +16,19 @@ public class BoardPane extends GridPane {
         this.setStyle("-fx-border-color: gray;");
     }
 
-    public void render(List<Tetromino> tetrominos, int x, int y) {
+    public void render(List<Tetromino> tetrominos, Tetromino shadow, int x, int y) {
+        // clear board
         this.getChildren().clear();
         renderEmpty(x, y);
 
+        // render shadow piece (first), so behind current if overlaped
+        if (shadow != null)
+            renderShadow(shadow);
+        // render all placed pieces
         for (Tetromino t : tetrominos) {
             renderPiece(t);
         }
+
     }
 
     private void renderEmpty(int x, int y) {
@@ -30,11 +37,26 @@ public class BoardPane extends GridPane {
                 renderMino(i, j, Color.WHITE);
     }
 
+    private void renderShadow(Tetromino tetromino) {
+        Color baseColor;
+        if (VisualConfig.ColoredShadow) {
+            baseColor = TetrominoColor.forType(tetromino.type);
+        } else {
+            baseColor = Color.GRAY;
+        }
+        Color blendedColor = baseColor.deriveColor(0, 1, 1, VisualConfig.ShadowOpacity);
+        renderPiece(tetromino, blendedColor);
+    }
+
     private void renderPiece(Tetromino tetromino) {
+        renderPiece(tetromino, TetrominoColor.forType(tetromino.type));
+    }
+
+    private void renderPiece(Tetromino tetromino, Color color) {
         for (Mino m : tetromino.children) {
             double x = m.getPosition().getX();
             double y = m.getPosition().getY();
-            renderMino((int)x, (int)y, TetrominoColor.forType(tetromino.type));
+            renderMino((int)x, (int)y, color);
         }
     }
 
