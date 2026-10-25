@@ -14,12 +14,11 @@ import tetris.utils.SDL;
 
 public class SDLApp {
     private final GameEngine engine = new GameEngine(10, 20, null);
-    private final GameWindow window = new GameWindow(new KeyBinds());
-    private final GameController controller = new GameController(engine, window, null);
-    public static void start() {
+    // private final GameWindow window = new GameWindow(new KeyBinds());
+    private final GameController controller = new GameController(engine, null, null);
+    public void start() {
         MemorySegment renderer = SDL.init_SDL(500, 800);
         SDL.simp_win(renderer);
-
 
         // create observers and register
         // todo: implement new displayManagers(observer) for SDL
