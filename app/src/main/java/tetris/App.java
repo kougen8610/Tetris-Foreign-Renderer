@@ -29,7 +29,7 @@ import tetris.graphics.GameWindow;
 
 public class App extends Application {
     private KeyBinds keyBinds = new KeyBinds();
-    private final GameEngine engine = new GameEngine(10, 20);
+    private final GameEngine engine = new GameEngine(10, 20, new JavaFXMainThreadDispatcher());
     private final GameWindow window = new GameWindow(keyBinds);
     private final GameController controller = new GameController(engine, window, new JavaFXMainThreadDispatcher());
     @Override
@@ -47,9 +47,8 @@ public class App extends Application {
         new SpinClearDisplayManager(engine.getScoreManager(), window.getSpinClearPane());
 
 
-        engine.setOperationListener(controller);
         // controller.setSoftDropFactor(15);
-        controller.setSoftDropFactor(Double.MAX_VALUE);
+        engine.setSoftDropFactor(Double.MAX_VALUE);
         engine.setGameOverListener(controller);
 
         controller.showMenu();
@@ -65,6 +64,7 @@ public class App extends Application {
 
     @Override 
     public void stop() {
+        controller.dispose();
         engine.dispose();
         controller.dispose();
 
