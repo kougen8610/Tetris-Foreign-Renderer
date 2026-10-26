@@ -11,9 +11,6 @@ import java.util.concurrent.Executors;
 import java.util.concurrent.ScheduledExecutorService;
 import java.util.concurrent.ScheduledFuture;
 import java.util.concurrent.TimeUnit;
-
-// import javafx.application.Platform;
-
 import java.util.Iterator;
 import java.util.LinkedList;
 
@@ -53,12 +50,13 @@ public class GameEngine implements Observable, Controllable{
     private TetrominoType holdTetrominoType;
     
     // score? rotation
-    private SpinState currentSpinState;
+    // private SpinState currentSpinState;
 
     // gameplay state & spawn
     private double gravity; // move down num per sec
     private double softDropFactor;
     private boolean isSoftDropping = false;
+    private ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
     private ScheduledFuture<?> gravityTask;
     private ScheduledFuture<?> arrTask;
     private Map<Direction, Integer> DASCharges = new HashMap<>(
@@ -67,7 +65,7 @@ public class GameEngine implements Observable, Controllable{
     // private double DAS = 5;
     private double ARR = 0;
 
-    private ScheduledExecutorService scheduler = Executors.newSingleThreadScheduledExecutor();
+    // lock
     private ScheduledFuture<?> lockTask;
     private int maxLockResets = 15;
     private int lockResets;
@@ -206,16 +204,25 @@ public class GameEngine implements Observable, Controllable{
         }
         updateShadow();
 
-        // detect & write currentSpinState
-        if (isImmobile())
-            currentSpinState = SpinState.MINI_SPIN;
-
-        if (currentTetromino.type == TetrominoType.T) {
+        SpinState currentSpinState = SpinState.NOT_SPIN;
+        // detect & let score handle spins
+        if (currentTetromino.type == TetrominoType.T) { // detect T-spin
             SpinState threeCornerTSpinState = detectTSpin();
-            if (threeCornerTSpinState == SpinState.PROPER_SPIN) {
-                currentSpinState = threeCornerTSpinState;
-            }
+            if (isImmobile()) {
+                switch (threeCornerTSpinState) {
+                    case PROPER_SPIN -> currentSpinState = SpinState.PROPER_SPIN;
+                    case MINI_SPIN -> currentSpinState = SpinState.MINI_SPIN;
+                    case NOT_SPIN -> currentSpinState = SpinState.MINI_SPIN;
+                    default -> currentSpinState = SpinState.NOT_SPIN;
+                }
+            } else currentSpinState = threeCornerTSpinState;
+            
+        } else { // detect other spin
+            if (isImmobile())
+                currentSpinState = SpinState.MINI_SPIN;
         }
+
+        scoreManager.onSpin(currentSpinState, currentTetromino.type);
     }
 
     public void move(Direction direction){
@@ -309,8 +316,7 @@ public class GameEngine implements Observable, Controllable{
         currentTetromino = null;
         System.out.printf("spawned: %s%n", t.type);
         // when gameover, notify controller
-        if (hasCollision(t)) {
-            dispose();
+        if (hasCollision(t) || scoreManager.haveAchievedGoal()) {
             listener.onGameOver();
             return;
         }
@@ -319,7 +325,7 @@ public class GameEngine implements Observable, Controllable{
         allTetrominos.add(currentTetromino);
         lockResets = 0;
 
-        currentSpinState = SpinState.NOT_SPIN;
+        // currentSpinState = SpinState.NOT_SPIN;
         checkLanded();
         handleDASEvent();
         handleSoftDropEvent();
@@ -510,13 +516,10 @@ public class GameEngine implements Observable, Controllable{
     }
 
     void lock() {
-        int cleared = checkCompletedLines(currentTetromino);
-        if (!(cleared == 0 && currentSpinState == SpinState.NOT_SPIN))
-            scoreManager.onSpinOrClear(currentTetromino.type, currentSpinState, cleared);
-        // lockTimer.stop();
+        int nLinesClearedcleared = checkCompletedLines(currentTetromino);
+        scoreManager.onLock(nLinesClearedcleared);
         lockTask.cancel(false);
         spawn();
-        // notifyObservers();
     }
 
     /**
