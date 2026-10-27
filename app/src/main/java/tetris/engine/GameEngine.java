@@ -137,11 +137,13 @@ public class GameEngine implements Observable, Controllable{
         }
         
     }
+
     private void handleSoftDropEvent() {
         if (isSoftDropping && softDropFactor == Double.MAX_VALUE) {
             moveDAS(Direction.DOWN);
         }
     }
+
     public void resetGravityTimeline(double gravity){
         if (gravityTask != null) {
             gravityTask.cancel(false);
@@ -157,6 +159,7 @@ public class GameEngine implements Observable, Controllable{
             });
         }, 0, duration, TimeUnit.MILLISECONDS);
     }
+
     public void startSoftDrop() {
         isSoftDropping = true;
         if (softDropFactor != Double.MAX_VALUE) {
@@ -164,18 +167,22 @@ public class GameEngine implements Observable, Controllable{
         }
         handleSoftDropEvent();
     }
+
     public void endSoftDrop() {
         isSoftDropping = false;
         if (softDropFactor != Double.MAX_VALUE)
             resetGravityTimeline(getGravity());
     }
+
     public void setSoftDropFactor(double softDropFactor) {
         this.softDropFactor = softDropFactor;
     }
+
     public void chargeDAS(Direction direction) {
         DASCharges.put(direction, DASCharges.get(direction) + 1);
         handleDASEvent();
     }  
+    
     public void unchargeDAS(Direction direction) {
         DASCharges.put(direction, DASCharges.get(direction) - 1);
         handleDASEvent();
